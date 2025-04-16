@@ -39,13 +39,15 @@ async def load_commands():
     from src.commands.reset_command import ResetCommand
     from src.commands.personality_command import PersonalityCommand
     from src.commands.memory_command import MemoryCommand
+    from src.commands.slap_command import SlapCommand
     
     # Initialize command handlers
     handlers = [
         AskCommand(memory_manager, llm_client),
         ResetCommand(memory_manager, llm_client),
         PersonalityCommand(memory_manager, llm_client),
-        MemoryCommand(memory_manager, llm_client)
+        MemoryCommand(memory_manager, llm_client),
+        SlapCommand(memory_manager, llm_client)
     ]
     
     # Register command handlers
@@ -127,6 +129,7 @@ async def on_error(event, *args, **kwargs):
 def main():
     """Main entry point for the bot."""
     try:
+        # logging.basicConfig(level=logging.DEBUG)
         logger.info("Starting bot...")
         bot.run(DISCORD_TOKEN)
     except discord.LoginFailure:

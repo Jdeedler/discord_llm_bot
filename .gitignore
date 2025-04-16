@@ -10,11 +10,15 @@ __pycache__/
 # Virtual environments
 venv/
 env/
+data/*
+logs/*
+
 
 # Editor files
 .vscode/
 .idea/
 .DS_Store
+.venv/
 
 # Testing
 /coverage

@@ -27,56 +27,81 @@ class AskCommand(CommandHandler):
     def description(self) -> str:
         """Return a description of the command."""
         return "Send a message to the LLM and get a response."
-    
+        
     async def handle(self, message: discord.Message, args: List[str]) -> None:
         """
         Handle the ask command.
-        
+
         Args:
             message: The Discord message that triggered the command
             args: List of command arguments (the message to send to the LLM)
         """
-        # Get the user ID
         user_id = str(message.author.id)
+        username = message.author.display_name or message.author.name
         
-        # Check if there's a message to send
+        # Check if this is a new user
+        is_new_user = not self.memory_manager.user_exists(user_id)
+        
         if not args:
             await self.send_response(
-                message, 
+                message,
                 "Please provide a message to send to the LLM. Example: !ask What is the capital of France?"
             )
             return
-        
-        # Join the arguments into a single message
+
         user_message = " ".join(args)
         
-        # Get the user's personality
-        personality = self.memory_manager.get_user_personality(user_id)
-        
-        # Get the conversation history
-        conversation_history = self.memory_manager.get_conversation_history(user_id)
-        
-        # Add the user's message to the conversation history
-        self.memory_manager.add_message(user_id, "user", user_message)
-        
-        # Send a typing indicator to show the bot is processing
-        async with message.channel.typing():
-            # Generate a response from the LLM
-            llm_response = self.llm_client.generate_response(
-                conversation_history + [{"role": "user", "content": user_message}],
-                personality=personality
-            )
+        # Format message differently for new users to clearly identify them
+        formatted_message = user_message
+        if is_new_user:
+            # Initialize the new user before adding any messages
+            self.memory_manager.initialize_user(user_id, username)
+            logger.info(f"New user initialized: {user_id} ({username})")
             
-            if llm_response:
-                # Add the LLM's response to the conversation history
-                self.memory_manager.add_message(user_id, "assistant", llm_response)
+            # Special formatting for the first message
+            formatted_message = f"[NEW USER {username}]: {user_message}"
+
+        # Add user's message to memory
+        self.memory_manager.add_message(user_id, "user", formatted_message, username=username)
+        
+        # Get personality and conversation history AFTER adding the current message
+        personality = self.memory_manager.get_user_personality(user_id)
+        conversation_history = self.memory_manager.get_conversation_history(user_id)
+
+        async with message.channel.typing():
+            try:
+                # Ensure username is in the mapping
+                user_mapping = self.memory_manager.get_all_usernames()
+                if user_id not in user_mapping:
+                    user_mapping[user_id] = username
+                    
+                # Pull global context
+                global_context = self.memory_manager.get_all_conversations()
                 
-                # Send the response to the user
-                await self.send_response(message, llm_response)
-            else:
-                # If there was an error generating a response
-                await self.send_response(
-                    message, 
-                    "Sorry, I couldn't generate a response. Please try again later."
+                # Generate response - note that the formatted message is already in conversation_history
+                llm_response = self.llm_client.generate_response(
+                    messages=conversation_history,
+                    personality=personality,
+                    global_context=global_context,
+                    current_user_id=user_id,
+                    current_username=username,
+                    user_mapping=user_mapping,
+                    is_new_user=is_new_user  # Flag to indicate new user status
                 )
-                logger.error(f"Failed to generate response for user {user_id}")
+
+                if llm_response:
+                    self.memory_manager.add_message(user_id, "assistant", llm_response)
+                    await self.send_response(message, llm_response)
+                else:
+                    await self.send_response(
+                        message,
+                        "Sorry, I couldn't generate a response. Please try again later."
+                    )
+                    logger.error(f"Failed to generate response for user {user_id} ({username})")
+
+            except Exception as e:
+                logger.exception(f"Error handling ask command for user {user_id} ({username}): {e}")
+                await self.send_response(
+                    message,
+                    "An unexpected error occurred while generating the response."
+                )
