@@ -1,0 +1,24 @@
+# Environment variables
+.env
+.env.local
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+env/
+
+# Editor files
+.vscode/
+.idea/
+.DS_Store
+
+# Testing
+/coverage
+*.lcov
+
+# Logs
+*.log
